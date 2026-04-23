@@ -1,0 +1,19 @@
+@import '@ionic/angular/css/core.css';
+@import '@ionic/angular/css/normalize.css';
+@import '@ionic/angular/css/structure.css';
+@import '@ionic/angular/css/typography.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, ion-app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+ion-content::part(scroll) {
+  display: flex;
+  flex-direction: column;
+}

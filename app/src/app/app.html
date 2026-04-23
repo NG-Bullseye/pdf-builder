@@ -1,0 +1,42 @@
+<ion-app>
+  <ion-header>
+    <ion-toolbar>
+      <ion-title slot="start">pdf-builder</ion-title>
+      <div slot="end" class="toolbar-actions">
+        @if (error()) {
+          <span class="error-msg">{{ error() }}</span>
+        }
+        <ion-button (click)="generate()" [disabled]="loading()" fill="solid" color="primary">
+          @if (loading()) {
+            <ion-spinner name="crescent" slot="start"></ion-spinner>
+          }
+          Generate
+        </ion-button>
+      </div>
+    </ion-toolbar>
+  </ion-header>
+
+  <ion-content>
+    <div class="split-pane">
+      <div class="pane editor-pane">
+        <textarea
+          class="md-editor"
+          [value]="markdown()"
+          (input)="onMarkdownChange($any($event.target).value)"
+          spellcheck="false"
+          autocomplete="off"
+        ></textarea>
+      </div>
+
+      <div class="pane preview-pane">
+        @if (pdfUrl()) {
+          <iframe [src]="pdfUrl()" class="pdf-frame"></iframe>
+        } @else {
+          <div class="empty-state">
+            <p>Klick Generate um das PDF zu erstellen.</p>
+          </div>
+        }
+      </div>
+    </div>
+  </ion-content>
+</ion-app>
