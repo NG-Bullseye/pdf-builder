@@ -1,12 +1,12 @@
 import { Component, signal, ElementRef, ViewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { IonicModule } from '@ionic/angular';
+import { IonApp, IonHeader, IonToolbar, IonTitle, IonButton, IonSpinner, IonContent } from '@ionic/angular/standalone';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, IonicModule],
+  imports: [FormsModule, IonApp, IonHeader, IonToolbar, IonTitle, IonButton, IonSpinner, IonContent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -62,7 +62,13 @@ Ziel: Lauffähige Basis mit definierten Schnittstellen.
           this.loading.set(false);
         },
         error: (err) => {
-          this.error.set(err.error?.error ?? 'Server nicht erreichbar');
+          if (err.error instanceof Blob) {
+            err.error.text().then((text: string) => {
+              try { this.error.set(JSON.parse(text).error); } catch { this.error.set('Server-Fehler'); }
+            });
+          } else {
+            this.error.set(err.error?.error ?? 'Server nicht erreichbar');
+          }
           this.loading.set(false);
         },
       });
