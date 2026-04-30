@@ -1,3 +1,27 @@
+# Build artefacts
 out/
-/tmp/
+dist/
 *.pdf
+/tmp/
+
+# Dependencies
+node_modules/
+
+# Local user content (user docs live here by default)
+docs/
+
+# Snapshots written by write_doc / PUT /api/doc
+.history/
+
+# Private / branded themes — keep only themes/default/ in the public repo
+themes/*
+!themes/default
+!themes/default/**
+
+# Env / secrets
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db

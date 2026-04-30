@@ -6,7 +6,26 @@
         @if (error()) {
           <span class="error-msg">{{ error() }}</span>
         }
-        <ion-button (click)="generate()" [disabled]="loading()" fill="solid" color="primary">
+        @if (selectedPath()) {
+          <span class="path-label">{{ selectedPath() }}{{ dirty() ? ' *' : '' }}</span>
+        }
+        <ion-button
+          (click)="save()"
+          [disabled]="saving() || !selectedPath() || !dirty()"
+          fill="outline"
+          color="light"
+        >
+          @if (saving()) {
+            <ion-spinner name="crescent" slot="start"></ion-spinner>
+          }
+          Save
+        </ion-button>
+        <ion-button
+          (click)="generate()"
+          [disabled]="loading() || !selectedPath()"
+          fill="solid"
+          color="primary"
+        >
           @if (loading()) {
             <ion-spinner name="crescent" slot="start"></ion-spinner>
           }
@@ -17,26 +36,69 @@
   </ion-header>
 
   <ion-content>
-    <div class="split-pane">
-      <div class="pane editor-pane">
-        <textarea
-          class="md-editor"
-          [value]="markdown()"
-          (input)="onMarkdownChange($any($event.target).value)"
-          spellcheck="false"
-          autocomplete="off"
-        ></textarea>
-      </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-header">Docs</div>
+        <ul class="tree">
+          @for (node of tree(); track node.path) {
+            <ng-container *ngTemplateOutlet="nodeTpl; context: { $implicit: node, depth: 0 }"></ng-container>
+          }
+        </ul>
+      </aside>
 
-      <div class="pane preview-pane">
-        @if (pdfUrl()) {
-          <iframe [src]="pdfUrl()" class="pdf-frame"></iframe>
-        } @else {
-          <div class="empty-state">
-            <p>Klick Generate um das PDF zu erstellen.</p>
-          </div>
-        }
+      <div class="split-pane">
+        <div class="pane editor-pane">
+          @if (selectedPath()) {
+            <textarea
+              class="md-editor"
+              [value]="markdown()"
+              (input)="onMarkdownChange($any($event.target).value)"
+              spellcheck="false"
+              autocomplete="off"
+            ></textarea>
+          } @else {
+            <div class="empty-state">
+              <p>Wähle links eine Datei.</p>
+            </div>
+          }
+        </div>
+
+        <div class="pane preview-pane">
+          @if (pdfUrl()) {
+            <iframe [src]="pdfUrl()" class="pdf-frame"></iframe>
+          } @else {
+            <div class="empty-state">
+              <p>Klick Generate um das PDF zu erstellen.</p>
+            </div>
+          }
+        </div>
       </div>
     </div>
   </ion-content>
 </ion-app>
+
+<ng-template #nodeTpl let-node let-depth="depth">
+  @if (node.type === 'dir') {
+    <li class="tree-item dir" [style.padding-left.px]="depth * 12 + 8">
+      <button class="tree-btn" (click)="toggleDir(node.path)">
+        <span class="caret">{{ isExpanded(node.path) ? '▾' : '▸' }}</span>
+        <span class="name">{{ node.name }}</span>
+      </button>
+    </li>
+    @if (isExpanded(node.path) && node.children) {
+      @for (child of node.children; track child.path) {
+        <ng-container *ngTemplateOutlet="nodeTpl; context: { $implicit: child, depth: depth + 1 }"></ng-container>
+      }
+    }
+  } @else {
+    <li
+      class="tree-item file"
+      [class.selected]="selectedPath() === node.path"
+      [style.padding-left.px]="depth * 12 + 24"
+    >
+      <button class="tree-btn" (click)="selectFile(node.path)">
+        <span class="name">{{ node.name }}</span>
+      </button>
+    </li>
+  }
+</ng-template>
