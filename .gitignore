@@ -13,10 +13,12 @@ docs/
 # Snapshots written by write_doc / PUT /api/doc
 .history/
 
-# Private / branded themes — keep only themes/default/ in the public repo
+# Private / branded themes — keep only themes/default/ and themes/example/ public
 themes/*
 !themes/default
 !themes/default/**
+!themes/example
+!themes/example/**
 
 # Env / secrets
 .env

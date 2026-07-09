@@ -51,14 +51,20 @@ themes/<name>/
   logo.png         # optional — auto-used if present and no --logo flag
 ```
 
+Two themes ship in the repo: `default` (plain) and `example` (branded layout —
+running logo, footer with company/address, accent color, page breaks). Use
+`example` as the starting point for your own brand.
+
 To brand it for your org:
 
-1. `cp -r themes/default themes/myorg`
-2. Edit `style.css` (brand color, fonts, footer text in `@bottom-center`).
+1. `cp -r themes/example themes/myorg`
+2. Edit `style.css` (accent color, fonts, footer text in `@bottom-center`).
 3. Drop your `logo.png` into the folder.
 4. `PDF_THEME=myorg ./build.sh some.md`
 
-The `.gitignore` ships with `themes/*/` excluded except `themes/default/`, so a private branded theme stays out of the public repo automatically.
+The `.gitignore` excludes `themes/*/` except `themes/default/` and
+`themes/example/`, so a private branded theme stays out of the public repo
+automatically.
 
 ## MCP server
 
@@ -78,7 +84,8 @@ Path traversal is blocked: tool args must be relative to `DOCS_ROOT`.
 ```
 build.sh             # CLI entry
 start.sh             # boots server + webapp
-themes/default/      # ships in the public repo
+themes/default/      # ships in the public repo — plain
+themes/example/      # ships in the public repo — branded starting point
 themes/<other>/      # gitignored — your private brand
 docs/                # gitignored — your content
 out/                 # gitignored — CLI build artefacts
