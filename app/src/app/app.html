@@ -48,6 +48,19 @@
 
       <div class="split-pane">
         <div class="pane editor-pane">
+          @if (externallyChanged()) {
+            <div class="conflict-banner">
+              <span>Datei wurde extern geändert.</span>
+              <ion-button size="small" fill="outline" (click)="reloadCurrent()">
+                Externe Version laden
+              </ion-button>
+              @if (dirty()) {
+                <ion-button size="small" fill="solid" color="warning" (click)="save()">
+                  Meine Version speichern
+                </ion-button>
+              }
+            </div>
+          }
           @if (selectedPath()) {
             <textarea
               class="md-editor"

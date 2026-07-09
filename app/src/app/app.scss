@@ -162,3 +162,14 @@ ion-content {
   color: #666;
   font-size: 14px;
 }
+
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #5a3a00;
+  color: #ffd58a;
+  font-size: 13px;
+  border-bottom: 1px solid #7a5000;
+}

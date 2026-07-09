@@ -1,7 +1,7 @@
-import express from 'express';
+import express, { Response } from 'express';
 import cors from 'cors';
 import { execFile } from 'child_process';
-import { promises as fs } from 'fs';
+import { promises as fs, watch, Stats } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { promisify } from 'util';
 
@@ -108,8 +108,72 @@ async function generatePdf(rel: string): Promise<string> {
   return targetPdf;
 }
 
-app.use(cors({ origin: 'http://localhost:4200' }));
+// ETag = mtimeMs as string. Cheap, monotonic per file, no hashing needed.
+function etagFromStat(s: Stats): string {
+  return `"${Math.floor(s.mtimeMs)}"`;
+}
+
+async function statOrNull(abs: string): Promise<Stats | null> {
+  try {
+    return await fs.stat(abs);
+  } catch (e: unknown) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
+// --- SSE broadcast channel ----------------------------------------------------
+// Clients subscribe to /api/events and receive { type, path } messages on every
+// filesystem change inside DOCS_ROOT. Powers live-reload + conflict detection.
+
+type FsEvent = { type: 'doc-changed' | 'tree-changed'; path?: string };
+const sseClients = new Set<Response>();
+
+function broadcast(event: FsEvent): void {
+  const payload = `data: ${JSON.stringify(event)}\n\n`;
+  for (const res of sseClients) res.write(payload);
+}
+
+// Debounce noisy fs.watch events (editors often emit 2-3 per save).
+const debouncedPaths = new Map<string, NodeJS.Timeout>();
+function notifyDocChanged(rel: string): void {
+  const existing = debouncedPaths.get(rel);
+  if (existing) clearTimeout(existing);
+  debouncedPaths.set(
+    rel,
+    setTimeout(() => {
+      debouncedPaths.delete(rel);
+      broadcast({ type: 'doc-changed', path: rel });
+    }, 80),
+  );
+}
+
+// Recursive watch is supported on darwin + win32. Linux needs chokidar.
+watch(DOCS_ROOT, { recursive: true }, (_eventType, filename) => {
+  if (!filename) return;
+  const rel = filename.toString();
+  // Ignore history snapshots and hidden files.
+  if (rel.startsWith(HISTORY_DIRNAME) || rel.split('/').some((seg) => seg.startsWith('.'))) return;
+  if (rel.endsWith('.md')) notifyDocChanged(rel);
+  else broadcast({ type: 'tree-changed' });
+});
+
+// --- HTTP routes --------------------------------------------------------------
+
+app.use(cors({ origin: 'http://localhost:4200', exposedHeaders: ['ETag'] }));
 app.use(express.json({ limit: '2mb' }));
+
+app.get('/api/events', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.flushHeaders();
+  res.write(`: connected\n\n`);
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
+});
 
 app.get('/api/tree', async (req, res) => {
   try {
@@ -123,7 +187,9 @@ app.get('/api/tree', async (req, res) => {
 app.get('/api/doc', async (req, res) => {
   try {
     const path = req.query.path as string;
-    const text = await fs.readFile(safePath(path), 'utf8');
+    const abs = safePath(path);
+    const [text, stat] = await Promise.all([fs.readFile(abs, 'utf8'), fs.stat(abs)]);
+    res.set('ETag', etagFromStat(stat));
     res.type('text/markdown').send(text);
   } catch (err: unknown) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
@@ -134,11 +200,28 @@ app.put('/api/doc', async (req, res) => {
   try {
     const { path, content } = req.body as { path: string; content: string };
     if (!path || typeof content !== 'string') throw new Error('path and content required');
-    await snapshotIfExists(path);
     const abs = safePath(path);
+    const ifMatch = req.header('If-Match');
+
+    // Optimistic locking: reject if file changed since the client last read it.
+    if (ifMatch) {
+      const current = await statOrNull(abs);
+      const currentEtag = current ? etagFromStat(current) : null;
+      if (currentEtag && currentEtag !== ifMatch) {
+        res.status(409).set('ETag', currentEtag).json({
+          error: 'Datei wurde extern geändert. Bitte neu laden.',
+          currentEtag,
+        });
+        return;
+      }
+    }
+
+    await snapshotIfExists(path);
     await fs.mkdir(dirname(abs), { recursive: true });
     await fs.writeFile(abs, content, 'utf8');
-    res.json({ ok: true });
+    const newStat = await fs.stat(abs);
+    const newEtag = etagFromStat(newStat);
+    res.set('ETag', newEtag).json({ ok: true, etag: newEtag });
   } catch (err: unknown) {
     res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
   }
@@ -178,3 +261,4 @@ app.listen(PORT, () => {
   console.log(`pdf-builder server on http://localhost:${PORT}`);
   console.log(`DOCS_ROOT=${DOCS_ROOT}`);
 });
+

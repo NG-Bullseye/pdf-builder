@@ -1,6 +1,6 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import {
   IonApp,
@@ -28,12 +28,17 @@ const API = 'http://localhost:3001/api';
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   tree = signal<TreeNode[]>([]);
   expanded = signal<Set<string>>(new Set());
   selectedPath = signal<string | null>(null);
   markdown = signal<string>('');
   originalMarkdown = signal<string>('');
+  // ETag of the version currently in the editor. Sent as If-Match on save so
+  // the server can reject writes that would clobber an external edit.
+  currentEtag = signal<string | null>(null);
+  // True when SSE reported a change to the open file after we last loaded it.
+  externallyChanged = signal(false);
 
   pdfUrl = signal<SafeResourceUrl | null>(null);
   loading = signal(false);
@@ -42,10 +47,37 @@ export class App implements OnInit {
 
   dirty = computed(() => this.markdown() !== this.originalMarkdown());
 
+  private events: EventSource | null = null;
+
   constructor(private http: HttpClient, private sanitizer: DomSanitizer) {}
 
   ngOnInit() {
     this.loadTree();
+    this.connectEvents();
+  }
+
+  ngOnDestroy() {
+    this.events?.close();
+  }
+
+  private connectEvents() {
+    this.events = new EventSource(`${API}/events`);
+    this.events.onmessage = (msg) => {
+      try {
+        const evt = JSON.parse(msg.data) as { type: string; path?: string };
+        if (evt.type === 'tree-changed') {
+          this.loadTree();
+        } else if (evt.type === 'doc-changed' && evt.path === this.selectedPath()) {
+          // Clean editor → silently reload. Dirty editor → flag for the user.
+          if (this.dirty()) this.externallyChanged.set(true);
+          else this.reloadCurrent();
+        }
+      } catch { /* ignore malformed events */ }
+    };
+    this.events.onerror = () => {
+      // EventSource auto-reconnects; only surface persistent failures.
+      // Silence transient drops to avoid spamming the UI on dev-server reloads.
+    };
   }
 
   loadTree() {
@@ -69,16 +101,36 @@ export class App implements OnInit {
   selectFile(path: string) {
     if (this.dirty() && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
     this.error.set(null);
+    this.externallyChanged.set(false);
     this.http
-      .get(`${API}/doc`, { params: { path }, responseType: 'text' })
+      .get(`${API}/doc`, { params: { path }, responseType: 'text', observe: 'response' })
       .subscribe({
-        next: (text) => {
-          this.markdown.set(text);
-          this.originalMarkdown.set(text);
+        next: (resp) => {
+          this.markdown.set(resp.body ?? '');
+          this.originalMarkdown.set(resp.body ?? '');
+          this.currentEtag.set(resp.headers.get('ETag'));
           this.selectedPath.set(path);
           this.pdfUrl.set(null);
         },
         error: (err) => this.error.set(err.error?.error ?? 'Datei konnte nicht geladen werden'),
+      });
+  }
+
+  // Force-reload the current file from disk, discarding the in-memory copy.
+  reloadCurrent() {
+    const path = this.selectedPath();
+    if (!path) return;
+    this.error.set(null);
+    this.externallyChanged.set(false);
+    this.http
+      .get(`${API}/doc`, { params: { path }, responseType: 'text', observe: 'response' })
+      .subscribe({
+        next: (resp) => {
+          this.markdown.set(resp.body ?? '');
+          this.originalMarkdown.set(resp.body ?? '');
+          this.currentEtag.set(resp.headers.get('ETag'));
+        },
+        error: (err) => this.error.set(err.error?.error ?? 'Reload fehlgeschlagen'),
       });
   }
 
@@ -87,15 +139,31 @@ export class App implements OnInit {
     if (!path) return;
     this.saving.set(true);
     this.error.set(null);
+    const etag = this.currentEtag();
+    const headers = etag ? new HttpHeaders({ 'If-Match': etag }) : undefined;
     this.http
-      .put(`${API}/doc`, { path, content: this.markdown() })
+      .put<{ ok: boolean; etag: string }>(
+        `${API}/doc`,
+        { path, content: this.markdown() },
+        { headers, observe: 'response' },
+      )
       .subscribe({
-        next: () => {
+        next: (resp) => {
           this.originalMarkdown.set(this.markdown());
+          this.currentEtag.set(resp.headers.get('ETag') ?? resp.body?.etag ?? null);
+          this.externallyChanged.set(false);
           this.saving.set(false);
         },
         error: (err) => {
-          this.error.set(err.error?.error ?? 'Speichern fehlgeschlagen');
+          if (err.status === 409) {
+            this.externallyChanged.set(true);
+            this.error.set('Konflikt: Datei wurde extern geändert. Mit "Externe Version laden" verwerfen oder erneut speichern (überschreibt).');
+            // Adopt the server's new ETag so a second save can force-overwrite.
+            const newEtag = err.headers?.get?.('ETag') ?? err.error?.currentEtag ?? null;
+            this.currentEtag.set(newEtag);
+          } else {
+            this.error.set(err.error?.error ?? 'Speichern fehlgeschlagen');
+          }
           this.saving.set(false);
         },
       });
