@@ -205,7 +205,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Renders a markdown file to PDF and writes it next to the source MD " +
         "(same folder, same basename, .pdf extension) inside DOCS_ROOT. Uses " +
-        "the onexip-branded pandoc + weasyprint pipeline from ~/Repos/pdf-builder. " +
+        "the onexip-branded pandoc + weasyprint pipeline of the pdf-builder repo (build.sh). " +
         "Call explain() first to learn how to change branding/layout.",
       inputSchema: {
         type: "object",

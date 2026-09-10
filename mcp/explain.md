@@ -3,7 +3,7 @@
 ## What this is
 An stdio MCP server that lets you read, write, and version markdown docs in
 the user's GDrive `OneXip` folder, and render any of them to PDF using the
-onexip-branded pandoc + weasyprint pipeline in `~/Repos/pdf-builder`.
+onexip-branded pandoc + weasyprint pipeline of this repo (`build.sh`).
 
 ## DOCS_ROOT
 All `path` arguments in tools are RELATIVE to `DOCS_ROOT`.
@@ -27,7 +27,7 @@ Never pass absolute host paths. `..` is rejected.
 - `explain()` — returns this document.
 
 ## How PDF rendering works
-1. `build.sh` in `~/Repos/pdf-builder` runs pandoc with `template.html` and
+1. `build.sh` in the repo root runs pandoc with `template.html` and
    `style.css`, producing HTML in `/tmp`.
 2. weasyprint converts that HTML to PDF.
 3. Output normally lands in `pdf-builder/out/`. The MCP overrides this and
@@ -44,8 +44,8 @@ the `PDF_THEME` env var (default: `default`). Each theme directory contains:
   and no explicit `--logo` flag is passed.
 
 To create a new theme: copy `themes/default/` to `themes/<your-name>/`, edit,
-then run with `PDF_THEME=<your-name>`. Branded themes are typically gitignored
-so the public repo only ships `themes/default/`.
+then run with `PDF_THEME=<your-name>`. Branded themes are gitignored;
+the public repo ships only `themes/default/` and `themes/example/`.
 
 After any edit to `style.css` or `template.html`, just call `generate_pdf`
 again. No rebuild step.

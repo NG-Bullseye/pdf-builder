@@ -28,7 +28,7 @@ Then open http://localhost:4200. The default `DOCS_ROOT` is `./docs/` (auto-crea
 CLI alternative:
 
 ```bash
-./build.sh path/to/file.md
+./build.sh example.md    # sample input shipped in the repo
 ```
 
 PDF lands in `out/`.
@@ -100,4 +100,4 @@ Every overwrite via `write_doc` or `PUT /api/doc` snapshots the previous file co
 
 ## License
 
-TBD.
+MIT — see `LICENSE`.
