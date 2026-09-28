@@ -82,6 +82,7 @@ Path traversal is blocked: tool args must be relative to `DOCS_ROOT`.
 ## Repo layout
 
 ```
+bootstrap.sh         # idempotent setup (deps check, npm install, MCP build), starts nothing
 build.sh             # CLI entry
 start.sh             # boots server + webapp
 themes/default/      # ships in the public repo — plain
